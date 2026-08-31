@@ -1,5 +1,60 @@
 {
-  "assignments": {},
+  "assignments": {
+    "96178:266511": {
+      "assignment_id": "266511",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 1",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/266511",
+      "visible": false
+    },
+    "96178:269210": {
+      "assignment_id": "269210",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 2",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269210",
+      "visible": false
+    },
+    "96178:269212": {
+      "assignment_id": "269212",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 3",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269212",
+      "visible": false
+    },
+    "96178:269213": {
+      "assignment_id": "269213",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 4",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269213",
+      "visible": false
+    },
+    "96178:269214": {
+      "assignment_id": "269214",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 5",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269214",
+      "visible": false
+    },
+    "96178:269215": {
+      "assignment_id": "269215",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 6",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269215",
+      "visible": false
+    }
+  },
   "quizzes": {
     "96178:88689": {
       "course_id": "96178",
