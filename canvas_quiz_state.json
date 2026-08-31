@@ -1,4 +1,59 @@
 {
-  "version": 1,
-  "quizzes": {}
+  "quizzes": {
+    "96178:88689": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "88689",
+      "title": "Quiz 1",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/88689",
+      "visible": false
+    },
+    "96178:89565": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "89565",
+      "title": "Quiz 2",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/89565",
+      "visible": false
+    },
+    "96178:89566": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "89566",
+      "title": "Quiz 3",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/89566",
+      "visible": false
+    },
+    "96178:89567": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "89567",
+      "title": "Quiz 4",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/89567",
+      "visible": false
+    },
+    "96178:89568": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "89568",
+      "title": "Quiz 5",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/89568",
+      "visible": false
+    },
+    "96178:89569": {
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "quiz_id": "89569",
+      "title": "Quiz 6",
+      "url": "https://canvas.nus.edu.sg/courses/96178/quizzes/89569",
+      "visible": false
+    }
+  },
+  "version": 1
 }
