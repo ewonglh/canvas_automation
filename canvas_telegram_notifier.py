@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Notify a Telegram chat when Canvas quizzes become visible.
+"""Notify a Telegram chat when Canvas assignments become visible.
 
 The script uses only Python's standard library so it can run directly in
 GitHub Actions.  Credentials are read from environment variables; no
@@ -23,7 +23,7 @@ The normal GitHub Actions invocation is:
 
     python canvas_telegram_notifier.py --once
 
-State is updated only after a notification succeeds.  A quiz that is
+State is updated only after a notification succeeds.  An assignment that is
 published and unlocked, then later becomes locked and is unlocked again, is
 treated as visible again and will generate a new notification.
 """
@@ -48,7 +48,8 @@ from urllib.request import Request, urlopen
 LOGGER = logging.getLogger("canvas_telegram_notifier")
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_INTERVAL_SECONDS = 300
-STATE_VERSION = 1
+STATE_VERSION = 2
+STATE_KEY = "assignments"
 
 
 class ApiError(RuntimeError):
@@ -102,22 +103,22 @@ def _is_false(value: Any) -> bool:
     return value is False or value == 0 or (isinstance(value, str) and value.lower() == "false")
 
 
-def is_quiz_visible(quiz: dict[str, Any], now: datetime | None = None) -> bool:
-    """Return whether the quiz appears available to the Canvas API user."""
+def is_assignment_visible(assignment: dict[str, Any], now: datetime | None = None) -> bool:
+    """Return whether the assignment appears available to the Canvas API user."""
 
-    if _is_false(quiz.get("published")):
+    if _is_false(assignment.get("published")):
         return False
-    if _is_true(quiz.get("locked_for_user")):
+    if _is_true(assignment.get("locked_for_user")):
         return False
-    if str(quiz.get("workflow_state", "")).lower() in {"unpublished", "deleted", "locked"}:
+    if str(assignment.get("workflow_state", "")).lower() in {"unpublished", "deleted", "locked"}:
         return False
 
     current = now or _utc_now()
-    unlock_at = _parse_canvas_datetime(quiz.get("unlock_at"))
+    unlock_at = _parse_canvas_datetime(assignment.get("unlock_at"))
     if unlock_at and current < unlock_at:
         return False
 
-    lock_at = _parse_canvas_datetime(quiz.get("lock_at"))
+    lock_at = _parse_canvas_datetime(assignment.get("lock_at"))
     if lock_at and current >= lock_at:
         return False
 
@@ -202,12 +203,12 @@ def _next_page_url(link_header: str) -> str | None:
     return None
 
 
-def fetch_quizzes(
+def fetch_assignments(
     canvas_base_url: str,
     canvas_token: str,
     course_ids: list[str],
 ) -> list[dict[str, Any]]:
-    """Fetch courses and their classic Canvas quizzes."""
+    """Fetch courses and their Canvas assignments."""
 
     base_url = canvas_base_url.rstrip("/")
     if course_ids:
@@ -235,33 +236,33 @@ def fetch_quizzes(
             continue
         course_id = str(course["id"])
         encoded_id = quote(course_id, safe="")
-        quizzes = _paginated_canvas_get(
-            f"{base_url}/api/v1/courses/{encoded_id}/quizzes?per_page=100",
+        assignments = _paginated_canvas_get(
+            f"{base_url}/api/v1/courses/{encoded_id}/assignments?per_page=100",
             token=canvas_token,
-            description=f"Canvas quizzes for course {course_id}",
+            description=f"Canvas assignments for course {course_id}",
         )
         course_name = str(course.get("name") or course.get("course_code") or course_id)
-        for quiz in quizzes:
+        for assignment in assignments:
             result.append(
                 {
                     "course_id": course_id,
                     "course_name": course_name,
-                    "quiz": quiz,
+                    "assignment": assignment,
                 }
             )
     return result
 
 
-def _quiz_url(canvas_base_url: str, course_id: str, quiz: dict[str, Any]) -> str:
-    supplied_url = quiz.get("html_url") or quiz.get("mobile_url")
+def _assignment_url(canvas_base_url: str, course_id: str, assignment: dict[str, Any]) -> str:
+    supplied_url = assignment.get("html_url") or assignment.get("url")
     if isinstance(supplied_url, str) and supplied_url.strip():
         return supplied_url.strip()
-    quiz_id = quote(str(quiz.get("id", "")), safe="")
-    return f"{canvas_base_url.rstrip('/')}/courses/{quote(course_id, safe='')}/quizzes/{quiz_id}"
+    assignment_id = quote(str(assignment.get("id", "")), safe="")
+    return f"{canvas_base_url.rstrip('/')}/courses/{quote(course_id, safe='')}/assignments/{assignment_id}"
 
 
-def _quiz_key(course_id: str, quiz: dict[str, Any]) -> str:
-    return f"{course_id}:{quiz.get('id')}"
+def _assignment_key(course_id: str, assignment: dict[str, Any]) -> str:
+    return f"{course_id}:{assignment.get('id')}"
 
 
 def _snapshot(
@@ -269,7 +270,7 @@ def _snapshot(
     canvas_base_url: str,
     course_id: str,
     course_name: str,
-    quiz: dict[str, Any],
+    assignment: dict[str, Any],
     visible: bool,
     previous: dict[str, Any],
     now: str,
@@ -279,10 +280,10 @@ def _snapshot(
         {
             "course_id": course_id,
             "course_name": course_name,
-            "quiz_id": str(quiz.get("id", "")),
-            "title": str(quiz.get("title") or "Untitled quiz"),
-            "url": _quiz_url(canvas_base_url, course_id, quiz),
-            "due_at": quiz.get("due_at"),
+            "assignment_id": str(assignment.get("id", "")),
+            "title": str(assignment.get("name") or assignment.get("title") or "Untitled assignment"),
+            "url": _assignment_url(canvas_base_url, course_id, assignment),
+            "due_at": assignment.get("due_at"),
             "visible": visible,
         }
     )
@@ -305,12 +306,12 @@ def _display_due_date(value: Any) -> str | None:
 def _telegram_message(record: dict[str, Any], canvas_base_url: str) -> str:
     course_name = html.escape(str(record["course_name"]))
     title = html.escape(str(record["title"]))
-    message = ["📝 <b>New Canvas quiz is visible</b>", "", f"<b>Course:</b> {course_name}", f"<b>Quiz:</b> {title}"]
+    message = ["📝 <b>New Canvas assignment is visible</b>", "", f"<b>Course:</b> {course_name}", f"<b>Assignment:</b> {title}"]
     due = _display_due_date(record.get("due_at"))
     if due:
         message.append(f"<b>Due:</b> {html.escape(due)}")
     url = record.get("url") or canvas_base_url
-    message.append(f'🔗 <a href="{html.escape(str(url), quote=True)}">Open quiz</a>')
+    message.append(f'🔗 <a href="{html.escape(str(url), quote=True)}">Open assignment</a>')
     return "\n".join(message)
 
 
@@ -337,12 +338,18 @@ def send_telegram_message(bot_token: str, chat_id: str, message: str) -> None:
 
 def _load_state(path: Path) -> tuple[dict[str, Any], bool]:
     if not path.exists():
-        return {"version": STATE_VERSION, "quizzes": {}}, False
+        return {"version": STATE_VERSION, STATE_KEY: {}}, False
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"Could not read state file {path}: {exc}") from None
-    if not isinstance(data, dict) or not isinstance(data.get("quizzes", {}), dict):
+    if not isinstance(data, dict):
+        raise ValueError(f"State file {path} has an invalid format")
+    # Keep any old quiz data intact but never use it for assignment polling.
+    # This lets an existing state file migrate without losing historical data.
+    if STATE_KEY not in data:
+        data[STATE_KEY] = {}
+    if not isinstance(data[STATE_KEY], dict):
         raise ValueError(f"State file {path} has an invalid format")
     data["version"] = STATE_VERSION
     return data, True
@@ -372,10 +379,10 @@ def poll_once(
     now = _timestamp(now_datetime)
     state, state_file_exists = _load_state(state_path)
     original_state = json.loads(json.dumps(state))
-    quizzes_state = state.setdefault("quizzes", {})
+    assignments_state = state.setdefault(STATE_KEY, {})
 
-    records = fetch_quizzes(canvas_base_url, canvas_token, course_ids)
-    records.sort(key=lambda item: (str(item["course_name"]).lower(), str(item["quiz"].get("title", "")).lower(), str(item["quiz"].get("id", ""))))
+    records = fetch_assignments(canvas_base_url, canvas_token, course_ids)
+    records.sort(key=lambda item: (str(item["course_name"]).lower(), str(item["assignment"].get("name", item["assignment"].get("title", ""))).lower(), str(item["assignment"].get("id", ""))))
 
     fetched_keys: set[str] = set()
     selected_course_ids: set[str] = set()
@@ -383,36 +390,36 @@ def poll_once(
     for item in records:
         course_id = str(item["course_id"])
         course_name = str(item["course_name"])
-        quiz = item["quiz"]
-        if "id" not in quiz:
-            LOGGER.warning("Skipping a Canvas quiz without an ID in course %s", course_id)
+        assignment = item["assignment"]
+        if "id" not in assignment:
+            LOGGER.warning("Skipping a Canvas assignment without an ID in course %s", course_id)
             continue
         selected_course_ids.add(course_id)
-        key = _quiz_key(course_id, quiz)
+        key = _assignment_key(course_id, assignment)
         fetched_keys.add(key)
-        previous = quizzes_state.get(key, {})
+        previous = assignments_state.get(key, {})
         if not isinstance(previous, dict):
             previous = {}
-        visible = is_quiz_visible(quiz, now_datetime)
+        visible = is_assignment_visible(assignment, now_datetime)
         if visible and not previous.get("visible", False):
             pending_notifications.append(
                 {
                     "key": key,
                     "course_id": course_id,
                     "course_name": course_name,
-                    "title": str(quiz.get("title") or "Untitled quiz"),
-                    "due_at": quiz.get("due_at"),
-                    "url": _quiz_url(canvas_base_url, course_id, quiz),
-                    "quiz": quiz,
+                    "title": str(assignment.get("name") or assignment.get("title") or "Untitled assignment"),
+                    "due_at": assignment.get("due_at"),
+                    "url": _assignment_url(canvas_base_url, course_id, assignment),
+                    "assignment": assignment,
                     "previous": previous,
                 }
             )
         elif not dry_run:
-            quizzes_state[key] = _snapshot(
+            assignments_state[key] = _snapshot(
                 canvas_base_url=canvas_base_url,
                 course_id=course_id,
                 course_name=course_name,
-                quiz=quiz,
+                assignment=assignment,
                 visible=visible,
                 previous=previous,
                 now=now,
@@ -421,7 +428,7 @@ def poll_once(
     if dry_run:
         for notification in pending_notifications:
             LOGGER.info("DRY RUN: would notify for %s / %s", notification["course_name"], notification["title"])
-        LOGGER.info("DRY RUN: found %d quiz records, %d newly visible", len(records), len(pending_notifications))
+        LOGGER.info("DRY RUN: found %d assignment records, %d newly visible", len(records), len(pending_notifications))
         return len(pending_notifications)
 
     failures = 0
@@ -433,29 +440,29 @@ def poll_once(
             failures += 1
             LOGGER.error("Could not notify for %s / %s: %s", notification["course_name"], notification["title"], exc)
             continue
-        quizzes_state[notification["key"]] = _snapshot(
+        assignments_state[notification["key"]] = _snapshot(
             canvas_base_url=canvas_base_url,
             course_id=notification["course_id"],
             course_name=notification["course_name"],
-            quiz=notification["quiz"],
+            assignment=notification["assignment"],
             visible=True,
             previous=notification["previous"],
             now=now,
         )
         LOGGER.info("Notified for %s / %s", notification["course_name"], notification["title"])
 
-    # A quiz that disappeared from a successfully fetched course is no longer
+    # An assignment that disappeared from a successfully fetched course is no longer
     # considered visible.  If it is later returned by Canvas, it can notify
     # again.  Never do this when no course was successfully discovered.
     if selected_course_ids:
-        for key, entry in list(quizzes_state.items()):
+        for key, entry in list(assignments_state.items()):
             if not isinstance(entry, dict) or str(entry.get("course_id")) not in selected_course_ids:
                 continue
             if key not in fetched_keys and entry.get("visible", False):
                 entry = dict(entry)
                 entry["visible"] = False
                 entry["became_hidden_at"] = now
-                quizzes_state[key] = entry
+                assignments_state[key] = entry
 
     if state != original_state or not state_file_exists:
         _write_state(state_path, state)
@@ -463,7 +470,7 @@ def poll_once(
 
     if failures:
         raise ApiError(f"{failures} Telegram notification(s) failed")
-    LOGGER.info("Poll complete: %d quiz records, %d newly visible", len(records), len(pending_notifications))
+    LOGGER.info("Poll complete: %d assignment records, %d newly visible", len(records), len(pending_notifications))
     return len(pending_notifications)
 
 

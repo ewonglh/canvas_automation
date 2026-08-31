@@ -1,4 +1,5 @@
 {
+  "assignments": {},
   "quizzes": {
     "96178:88689": {
       "course_id": "96178",
@@ -55,5 +56,5 @@
       "visible": false
     }
   },
-  "version": 1
+  "version": 2
 }
