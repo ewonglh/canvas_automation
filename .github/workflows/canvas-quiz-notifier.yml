@@ -2,7 +2,10 @@ name: Canvas assignment notifier
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 16 * * 2"
+      timezone: "Asia/Singapore"
+    - cron: "0 10 * * 5"
+      timezone: "Asia/Singapore"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +18,7 @@ concurrency:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 130
     env:
       CANVAS_BASE_URL: ${{ secrets.CANVAS_BASE_URL }}
       CANVAS_API_TOKEN: ${{ secrets.CANVAS_API_TOKEN }}
@@ -37,22 +40,69 @@ jobs:
       - name: Poll Canvas assignments and notify Telegram
         id: poll
         continue-on-error: true
-        run: python canvas_telegram_notifier.py --once
-
-      - name: Commit assignment notification state
-        if: always()
         shell: bash
         run: |
-          if [[ -z "$(git status --porcelain -- canvas_quiz_state.json)" ]]; then
-            echo "No state changes to commit."
-            exit 0
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add canvas_quiz_state.json
-          git commit -m "chore: update Canvas assignment notification state"
-          git push origin HEAD:main
+
+          persist_state() {
+            if [[ -n "$(git status --porcelain -- canvas_quiz_state.json)" ]]; then
+              git add canvas_quiz_state.json
+              git commit -m "chore: update Canvas assignment notification state"
+            fi
+
+            if [[ -n "$(git log --oneline origin/main..HEAD)" ]]; then
+              git push origin HEAD:main
+            fi
+          }
+
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            poll_status=0
+            python canvas_telegram_notifier.py --once || poll_status=$?
+            if ! persist_state; then
+              poll_status=1
+            fi
+            exit "${poll_status}"
+          fi
+
+          # GitHub Actions cannot schedule a workflow every minute. Keep one
+          # runner alive for this two-hour window and run the existing one-shot
+          # poller on minute-aligned boundaries instead.
+          deadline=$((SECONDS + 7200))
+          next_poll=$SECONDS
+          poll_count=0
+          poll_failures=0
+
+          while (( SECONDS < deadline )); do
+            poll_count=$((poll_count + 1))
+            echo "Starting Canvas poll ${poll_count} at $(date --iso-8601=seconds)"
+
+            if ! python canvas_telegram_notifier.py --once; then
+              poll_failures=$((poll_failures + 1))
+              echo "Canvas poll ${poll_count} failed; continuing with the next poll."
+            fi
+
+            if ! persist_state; then
+              poll_failures=$((poll_failures + 1))
+              echo "Could not persist notification state; continuing with the next poll."
+            fi
+
+            next_poll=$((next_poll + 60))
+            sleep_for=$((next_poll - SECONDS))
+            if (( sleep_for > 0 && SECONDS < deadline )); then
+              sleep "${sleep_for}"
+            fi
+          done
+
+          # Retry any state push left pending by a transient failure.
+          if ! persist_state; then
+            poll_failures=$((poll_failures + 1))
+          fi
+
+          echo "Completed ${poll_count} Canvas poll(s) with ${poll_failures} failure(s)."
+          if (( poll_failures > 0 )); then
+            exit 1
+          fi
 
       - name: Fail if polling failed
         if: steps.poll.outcome == 'failure'
