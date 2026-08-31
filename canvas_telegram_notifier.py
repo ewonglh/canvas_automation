@@ -23,6 +23,10 @@ The normal GitHub Actions invocation is:
 
     python canvas_telegram_notifier.py --once
 
+The manual summary-test invocation is:
+
+    python canvas_telegram_notifier.py --summary
+
 State is updated only after a notification succeeds.  An assignment that is
 published and unlocked, then later becomes locked and is unlocked again, is
 treated as visible again and will generate a new notification.
@@ -48,6 +52,7 @@ from urllib.request import Request, urlopen
 LOGGER = logging.getLogger("canvas_telegram_notifier")
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_INTERVAL_SECONDS = 300
+TELEGRAM_MAX_TEXT_LENGTH = 4096
 STATE_VERSION = 2
 STATE_KEY = "assignments"
 
@@ -315,6 +320,81 @@ def _telegram_message(record: dict[str, Any], canvas_base_url: str) -> str:
     return "\n".join(message)
 
 
+def _visible_assignment_records(
+    records: list[dict[str, Any]],
+    canvas_base_url: str,
+    now: datetime | None = None,
+) -> list[dict[str, str]]:
+    visible: list[dict[str, str]] = []
+    current = now or _utc_now()
+    for item in records:
+        assignment = item.get("assignment")
+        if not isinstance(assignment, dict) or "id" not in assignment:
+            continue
+        if not is_assignment_visible(assignment, current):
+            continue
+        visible.append(
+            {
+                "course_name": str(item.get("course_name") or item.get("course_id") or "Unknown course"),
+                "title": str(assignment.get("name") or assignment.get("title") or "Untitled assignment"),
+                "url": _assignment_url(canvas_base_url, str(item.get("course_id", "")), assignment),
+            }
+        )
+    visible.sort(key=lambda item: (item["course_name"].lower(), item["title"].lower(), item["url"]))
+    return visible
+
+
+def _split_telegram_lines(lines: list[str], max_length: int = TELEGRAM_MAX_TEXT_LENGTH) -> list[str]:
+    messages: list[str] = []
+    current: list[str] = []
+    for line in lines:
+        if len(line) > max_length:
+            raise ApiError("A Telegram summary line exceeds the maximum message length")
+        candidate = "\n".join([*current, line])
+        if current and len(candidate) > max_length:
+            messages.append("\n".join(current))
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        messages.append("\n".join(current))
+    return messages
+
+
+def _assignment_summary_messages(
+    records: list[dict[str, Any]],
+    canvas_base_url: str,
+    now: datetime | None = None,
+) -> tuple[list[str], int]:
+    visible = _visible_assignment_records(records, canvas_base_url, now)
+    if not visible:
+        return ["📚 <b>Canvas assignment summary</b>\nNo visible assignments found."], 0
+
+    lines = [f"📚 <b>Visible Canvas assignments ({len(visible)})</b>", ""]
+    lines.extend(
+        f"{html.escape(item['course_name'])} — {html.escape(item['title'])} — "
+        f"<a href=\"{html.escape(item['url'], quote=True)}\">{html.escape(item['url'])}</a>"
+        for item in visible
+    )
+    return _split_telegram_lines(lines), len(visible)
+
+
+def send_assignment_summary(
+    *,
+    canvas_base_url: str,
+    canvas_token: str,
+    telegram_bot_token: str,
+    telegram_chat_id: str,
+    course_ids: list[str],
+) -> int:
+    records = fetch_assignments(canvas_base_url, canvas_token, course_ids)
+    messages, visible_count = _assignment_summary_messages(records, canvas_base_url)
+    for message in messages:
+        send_telegram_message(telegram_bot_token, telegram_chat_id, message)
+    LOGGER.info("Sent assignment summary: %d visible assignments in %d Telegram message(s)", visible_count, len(messages))
+    return visible_count
+
+
 def send_telegram_message(bot_token: str, chat_id: str, message: str) -> None:
     # Keep the token in the URL only; never log this URL or include it in an
     # exception message.
@@ -476,7 +556,9 @@ def poll_once(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--once", action="store_true", help="Run one poll and exit")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="Run one poll and exit")
+    mode.add_argument("--summary", action="store_true", help="Send a compact summary of all currently visible assignments without changing state")
     parser.add_argument("--dry-run", action="store_true", help="Poll Canvas without sending Telegram messages or changing state")
     parser.add_argument("--state-file", type=Path, help="Override CANVAS_STATE_FILE")
     parser.add_argument("--interval", type=int, help="Continuous-mode interval in seconds")
@@ -487,6 +569,26 @@ def _run(args: argparse.Namespace) -> int:
     canvas_base_url = _required_env("CANVAS_BASE_URL").rstrip("/")
     canvas_token = _required_env("CANVAS_API_TOKEN")
     course_ids = _parse_course_ids(os.environ.get("CANVAS_COURSE_IDS"))
+
+    if args.summary:
+        if args.dry_run:
+            records = fetch_assignments(canvas_base_url, canvas_token, course_ids)
+            messages, visible_count = _assignment_summary_messages(records, canvas_base_url)
+            for message in messages:
+                LOGGER.info("DRY RUN summary:\n%s", message)
+            LOGGER.info("DRY RUN summary found %d visible assignments", visible_count)
+            return 0
+        telegram_bot_token = _required_env("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = _required_env("TELEGRAM_CHAT_ID")
+        send_assignment_summary(
+            canvas_base_url=canvas_base_url,
+            canvas_token=canvas_token,
+            telegram_bot_token=telegram_bot_token,
+            telegram_chat_id=telegram_chat_id,
+            course_ids=course_ids,
+        )
+        return 0
+
     state_path = args.state_file or Path(os.environ.get("CANVAS_STATE_FILE", "canvas_quiz_state.json"))
     interval = args.interval or int(os.environ.get("CANVAS_INTERVAL_SECONDS", DEFAULT_INTERVAL_SECONDS))
     if interval <= 0:

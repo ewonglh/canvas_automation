@@ -15,4 +15,6 @@ Optionally add the repository variable `CANVAS_COURSE_IDS` as a comma-separated 
 
 The workflow can also be run manually with **Actions → Canvas assignment notifier → Run workflow**. Credentials must be configured before doing so.
 
+For a one-off Telegram test, use **Actions → Test Canvas assignment Telegram summary → Run workflow**. This fetches currently visible assignments and sends a compact summary without changing the notification state.
+
 No credentials belong in this repository. The state file contains assignment metadata and notification timestamps; any legacy quiz history is retained but is not polled or notified.
