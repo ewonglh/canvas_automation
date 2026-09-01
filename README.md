@@ -13,7 +13,7 @@ Add these repository secrets under **Settings → Secrets and variables → Acti
 
 Optionally add the repository variable `CANVAS_COURSE_IDS` as a comma-separated list of course IDs. If it is omitted, the workflow discovers the active courses available to the Canvas token.
 
-The workflow can also be run manually with **Actions → Canvas assignment notifier → Run workflow**; manual runs perform one poll. Credentials must be configured before doing so.
+The workflow can also be run manually with **Actions → Canvas assignment notifier → Run workflow**; manual runs perform one poll by default. To manually run the one-minute polling loop, enable **Run the one-minute polling window instead of one poll** and optionally provide a Singapore local end time such as `18:00`.
 
 For a one-off Telegram test, use **Actions → Test Canvas assignment Telegram summary → Run workflow**. This fetches currently visible assignments and sends a compact summary without changing the notification state.
 

@@ -7,6 +7,17 @@ on:
     - cron: "0 10 * * 5"
       timezone: "Asia/Singapore"
   workflow_dispatch:
+    inputs:
+      run_window:
+        description: "Run the one-minute polling window instead of one poll"
+        required: false
+        type: boolean
+        default: false
+      window_end:
+        description: "Singapore local end time for a manual window (HH:MM or HHMM)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -26,6 +37,8 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       CANVAS_COURSE_IDS: ${{ vars.CANVAS_COURSE_IDS }}
       CANVAS_STATE_FILE: canvas_quiz_state.json
+      RUN_WINDOW: ${{ inputs.run_window }}
+      WINDOW_END: ${{ inputs.window_end }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -56,7 +69,7 @@ jobs:
             fi
           }
 
-          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" != "schedule" && "${RUN_WINDOW:-false}" != "true" ]]; then
             poll_status=0
             python canvas_telegram_notifier.py --once || poll_status=$?
             if ! persist_state; then
@@ -68,7 +81,27 @@ jobs:
           # GitHub Actions cannot schedule a workflow every minute. Keep one
           # runner alive for this two-hour window and run the existing one-shot
           # poller on minute-aligned boundaries instead.
-          deadline=$((SECONDS + 7200))
+          window_end="${WINDOW_END:-}"
+          if [[ -n "${window_end}" ]]; then
+            if [[ "${window_end}" =~ ^([01][0-9]|2[0-3]):?([0-5][0-9])$ ]]; then
+              window_end="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
+            else
+              echo "Invalid WINDOW_END '${window_end}'; use HH:MM or HHMM."
+              exit 1
+            fi
+
+            singapore_today="$(TZ=Asia/Singapore date +%F)"
+            end_epoch="$(TZ=Asia/Singapore date -d "${singapore_today} ${window_end}" +%s)"
+            now_epoch="$(TZ=Asia/Singapore date +%s)"
+            remaining_seconds=$((end_epoch - now_epoch))
+            if (( remaining_seconds <= 0 )); then
+              echo "WINDOW_END '${window_end}' has already passed in Asia/Singapore."
+              exit 1
+            fi
+            deadline=$((SECONDS + remaining_seconds))
+          else
+            deadline=$((SECONDS + 7200))
+          fi
           next_poll=$SECONDS
           poll_count=0
           poll_failures=0
