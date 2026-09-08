@@ -1,6 +1,6 @@
 # Canvas to Telegram assignment notifier
 
-The GitHub Actions workflow polls Canvas every minute during two Singapore-time windows: Tuesday from 4:00–6:00 PM and Friday from 10:00 AM–12:00 PM. It sends a Telegram message when an assignment becomes visible to the Canvas API user. Notification state is kept in `canvas_quiz_state.json` and committed by the workflow so scheduled runs remain idempotent. GitHub may delay scheduled workflow starts during periods of high load.
+Two Codex automations dispatch the GitHub Actions workflow at fixed Singapore-time windows: Tuesday from 4:00–6:00 PM and Friday from 10:00 AM–12:00 PM. The workflow then polls Canvas every minute and sends a Telegram message when an assignment becomes visible to the Canvas API user. Notification state is kept in `canvas_quiz_state.json` and committed by the workflow so runs remain idempotent.
 
 ## GitHub configuration
 

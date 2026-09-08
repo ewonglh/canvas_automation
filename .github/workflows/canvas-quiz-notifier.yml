@@ -1,11 +1,6 @@
 name: Canvas assignment notifier
 
 on:
-  schedule:
-    - cron: "0 16 * * 2"
-      timezone: "Asia/Singapore"
-    - cron: "0 10 * * 5"
-      timezone: "Asia/Singapore"
   workflow_dispatch:
     inputs:
       run_window:
@@ -78,9 +73,9 @@ jobs:
             exit "${poll_status}"
           fi
 
-          # GitHub Actions cannot schedule a workflow every minute. Keep one
-          # runner alive for this two-hour window and run the existing one-shot
-          # poller on minute-aligned boundaries instead.
+          # A Codex automation dispatches this manual workflow at the start of
+          # each window. Keep one runner alive for the window and run the
+          # existing one-shot poller on minute-aligned boundaries.
           window_end="${WINDOW_END:-}"
           if [[ -n "${window_end}" ]]; then
             if [[ "${window_end}" =~ ^([01][0-9]|2[0-3]):?([0-5][0-9])$ ]]; then
