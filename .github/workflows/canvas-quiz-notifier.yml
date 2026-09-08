@@ -12,7 +12,7 @@ on:
         description: "Run the one-minute polling window instead of one poll"
         required: false
         type: boolean
-        default: false
+        default: true
       window_end:
         description: "Singapore local end time for a manual window (HH:MM or HHMM)"
         required: false
