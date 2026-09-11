@@ -75,6 +75,15 @@
       "title": "Quiz 8",
       "url": "https://canvas.nus.edu.sg/courses/96178/assignments/269219",
       "visible": false
+    },
+    "96178:275052": {
+      "assignment_id": "275052",
+      "course_id": "96178",
+      "course_name": "ST2132 Mathematical Statistics [2610]",
+      "due_at": null,
+      "title": "Quiz 9",
+      "url": "https://canvas.nus.edu.sg/courses/96178/assignments/275052",
+      "visible": false
     }
   },
   "quizzes": {
