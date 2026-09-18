@@ -109,12 +109,13 @@
     },
     "96178:275055": {
       "assignment_id": "275055",
+      "became_visible_at": "2026-09-18T03:04:06Z",
       "course_id": "96178",
       "course_name": "ST2132 Mathematical Statistics [2610]",
       "due_at": null,
       "title": "Quiz 12",
       "url": "https://canvas.nus.edu.sg/courses/96178/assignments/275055",
-      "visible": false
+      "visible": true
     }
   },
   "quizzes": {
